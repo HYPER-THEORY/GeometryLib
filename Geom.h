@@ -1,7 +1,9 @@
+#include <array>
 #include <cmath>
 #include <deque>
 #include <random>
 #include <set>
+#include <unordered_set>
 #include <vector>
 
 using namespace std;
@@ -278,7 +280,8 @@ public:
 		It it_n = next(it);
 		It it_p = prev(it);
 		if ((it_p->p - it_n->p).cross(v - it_n->p) < EPS) {
-			return void(t.erase(it));
+			t.erase(it);
+			return;
 		}
 		It past = it_n;
 		it_n = next(it_n);
@@ -337,9 +340,7 @@ public:
 
 	PointSet() = default;
 	
-	PointSet(Line* l, int s) {
-		line.insert(line.end(), l, l + s);
-	}
+	PointSet(Line* l, int s) : line(vector<Line>(l, l + s)) {}
 	
 	void add(Line* l, int s) {
 		line.insert(line.end(), l, l + s);
@@ -446,6 +447,112 @@ public:
 	}
 };
 
+class KdNode2 {
+public:
+	Vec2 v;
+	Vec2 min_v;
+	Vec2 max_v;
+	KdNode2* p = nullptr;
+	KdNode2* l = nullptr;
+	KdNode2* r = nullptr;
+	
+	KdNode2(const Vec2& v) : v(v), min_v(v), max_v(v) {}
+};
+
+class KdTree2 {
+public:
+	KdNode2* root = nullptr;
+	
+	KdTree2(Vec2* v, int s) {
+		root = build(v, 0, s, 1, nullptr);
+	}
+	
+	static bool dim_x(const Vec2& a, const Vec2& b) {
+		return a.x < b.x;
+	}
+	
+	static bool dim_y(const Vec2& a, const Vec2& b) {
+		return a.y < b.y;
+	}
+	
+	static double min_dist(const Vec2& v, const KdNode2& n) {
+		bool inside_x = v.x > n.min_v.x && v.x < n.max_v.x;
+		bool inside_y = v.y > n.min_v.y && v.y < n.max_v.y;
+		if (inside_x && inside_y) return 0;
+		if (inside_x) return fmin(v.y - n.max_v.y, n.min_v.y - v.y);
+		if (inside_y) return fmin(v.x - n.max_v.x, n.min_v.x - v.x);
+		double dist = 0;
+		dist = fmin(dist, v.dist(n.min_v));
+		dist = fmin(dist, v.dist(n.max_v));
+		dist = fmin(dist, v.dist({n.min_v.x, n.max_v.y}));
+		dist = fmin(dist, v.dist({n.max_v.x, n.min_v.y}));
+		return dist;
+	}
+	
+	static double max_dist(const Vec2& v, const KdNode2& n) {
+		double dist = 0;
+		dist = fmax(dist, v.dist(n.min_v));
+		dist = fmax(dist, v.dist(n.max_v));
+		dist = fmax(dist, v.dist({n.min_v.x, n.max_v.y}));
+		dist = fmax(dist, v.dist({n.max_v.x, n.min_v.y}));
+		return dist;
+	}
+
+	KdNode2* build(Vec2* v, int l, int r, bool f, KdNode2* p) {
+		if (l >= r) return nullptr;
+		int mid = (l + r) / 2;
+		nth_element(v + l, v + mid, v + r, f ? dim_x : dim_y);
+		KdNode2* n = new KdNode2(v[mid]);
+		n->p = p;
+		n->l = build(v, l, mid, !f, n);
+		n->r = build(v, mid + 1, r, !f, n);
+		if (n->l != nullptr) {
+			n->min_v.x = fmin(n->min_v.x, n->l->min_v.x);
+			n->min_v.y = fmin(n->min_v.y, n->l->min_v.y);
+			n->max_v.x = fmax(n->max_v.x, n->l->max_v.x);
+			n->max_v.y = fmax(n->max_v.y, n->l->max_v.y);
+		}
+		if (n->r != nullptr) {
+			n->min_v.x = fmin(n->min_v.x, n->r->min_v.x);
+			n->min_v.y = fmin(n->min_v.y, n->r->min_v.y);
+			n->max_v.x = fmax(n->max_v.x, n->r->max_v.x);
+			n->max_v.y = fmax(n->max_v.y, n->r->max_v.y);
+		}
+		return n;
+	}
+	
+	void farthest(const Vec2& v, KdNode2* n, double& d) const {
+		if (n == nullptr || max_dist(v, *n) <= d) return;
+		d = fmax(d, v.dist(n->v));
+		farthest(v, n->l, d);
+		farthest(v, n->r, d);
+	}
+
+	void nearest(const Vec2& v, KdNode2* n, double& d) const {
+		if (n == nullptr || min_dist(v, *n) >= d) return;
+		d = fmin(d, v.dist(n->v));
+		nearest(v, n->l, d);
+		nearest(v, n->r, d);
+	}
+	
+	void farthest_pair(KdNode2* n, double& d) const {
+		if (n == nullptr) return;
+		farthest(n->v, root, d);
+		farthest_pair(n->l, d);
+		farthest_pair(n->r, d);
+	}
+	
+	void nearest_pair(KdNode2* n, double& d) const {
+		if (n == nullptr) return;
+		Vec2 t = n->v;
+		n->v.x += d * 2;
+		nearest(t, root, d);
+		n->v = t;
+		nearest_pair(n->l, d);
+		nearest_pair(n->r, d);
+	}
+};
+
 class Vec3 {
 public:
 	double x, y, z;
@@ -461,7 +568,7 @@ public:
 	double dot(const Vec3& v) const {
 		return x * v.x + y * v.y + z * v.z;
 	}
-
+	
 	Vec3 cross(const Vec3& v) const {
 		return {y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x};
 	}
@@ -503,6 +610,58 @@ VEC3_OP_V(+) VEC3_OP_V(-) VEC3_OP_V(*) VEC3_OP_V(/)
 
 VEC3_OP_D(+) VEC3_OP_D(-) VEC3_OP_D(*) VEC3_OP_D(/)
 
+class ConvexHull {
+public:
+	std::vector<Vec3> vertices;
+	std::vector<Vec3> normals;
+	std::vector<std::array<int, 3> > faces;
+	
+	ConvexHull(Vec3* v, int s) : vertices(vector<Vec3>(v, v + s)) {}
+	
+	void add_vertex(Vec3* v, int s) {
+		vertices.insert(vertices.end(), v, v + s);
+	}
+	
+	void compute_convex_hull() {
+		insert_face(0, 1, 2);
+		insert_face(2, 1, 0);
+		size_t size = vertices.size();
+		for (int i = 3; i < size; ++i) {
+			std::unordered_set<long long> new_faces;
+			auto face_iter = faces.begin();
+			auto normal_iter = normals.begin();
+			while (face_iter != faces.end()) {
+				Vec3 dir = vertices[i] - vertices[(*face_iter)[0]];
+				if (normal_iter->dot(dir) <= 0) {
+					++face_iter;
+					++normal_iter;
+					continue;
+				}
+				for (int k = 0; k < 3; ++k) {
+					long long u = (*face_iter)[k];
+					long long v = (*face_iter)[(k + 1) % 3];
+					long long uv = v << 32 | u;
+					if (new_faces.count(uv) != 0) {
+					   new_faces.erase(uv);
+					} else {
+					   new_faces.insert(u << 32 | v);
+					}
+				}
+				face_iter = faces.erase(face_iter);
+				normal_iter = normals.erase(normal_iter);
+			}
+			for (auto& f : new_faces) {
+				insert_face(i, f >> 32, f & 0xFFFFFFFFll);
+			}
+		}
+	}
+	
+	void insert_face(int a, int b, int c) {
+		faces.push_back({a, b, c});
+		normals.push_back((vertices[b] - vertices[a]).cross(vertices[c] - vertices[a]));
+	}
+};
+
 class Ray {
 public:
 	Vec3 o, dir;
@@ -527,3 +686,15 @@ public:
 		return ac.dot(q) * inverse;
 	}
 };
+
+double simpson(double l, double r, double f(double)) {
+	return (f(l) + f(r) + f((l + r) / 2) * 4) * (r - l) / 6;
+}
+
+double adaptive_simpson(double l, double r, double s, double p, double f(double)) {
+	double mid = (l + r) / 2;
+	double sl = simpson(l, mid, f);
+	double sr = simpson(mid, r, f);
+	if (fabs(sl + sr - s) < p) return sl + sr;
+	return adaptive_simpson(l, mid, sl, p, f) + adaptive_simpson(mid, r, sr, p, f);
+}
