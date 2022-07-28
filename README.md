@@ -5,7 +5,9 @@ A extremely simplified template of Computational Geometry in programming contest
 
 ### What is GeometryLib ###
 
-计算几何库，但极度简短，适用于竞赛。
+极度简短的计算几何库。
+
+如果觉得好用的话，请给 [Ink 3D](https://github.com/HYPER-THEORY/Ink3D) 项目点个 Star。
 
 ### How to use ###
 
